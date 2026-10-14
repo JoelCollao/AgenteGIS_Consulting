@@ -1,0 +1,1158 @@
+{
+  "components": {
+    "schemas": {
+      "BufferAnalisisRequest": {
+        "properties": {
+          "dissolve": {
+            "default": false,
+            "description": "Se acepta y se ignora en modo PostGIS",
+            "title": "Dissolve",
+            "type": "boolean"
+          },
+          "distance": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 100000.0,
+            "title": "Distance",
+            "type": "number"
+          },
+          "geom_column": {
+            "default": "geom",
+            "title": "Geom Column",
+            "type": "string"
+          },
+          "id_column": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id Column"
+          },
+          "id_value": {
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id Value"
+          },
+          "limit": {
+            "default": 500,
+            "exclusiveMinimum": 0.0,
+            "maximum": 2000.0,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "output_srid": {
+            "default": 4326,
+            "description": "Se acepta y se ignora: sale en 4326",
+            "maximum": 900914.0,
+            "minimum": 1.0,
+            "title": "Output Srid",
+            "type": "integer"
+          },
+          "table": {
+            "description": "Capa PostGIS",
+            "minLength": 1,
+            "title": "Table",
+            "type": "string"
+          },
+          "unit": {
+            "default": "meters",
+            "description": "meters | km | miles",
+            "title": "Unit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "table",
+          "distance"
+        ],
+        "title": "BufferAnalisisRequest",
+        "type": "object"
+      },
+      "BufferAnalisisResponse": {
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "distance": {
+            "title": "Distance",
+            "type": "number"
+          },
+          "geojson": {
+            "$ref": "#/components/schemas/FeatureCollection"
+          },
+          "operation": {
+            "const": "buffer_analysis",
+            "title": "Operation",
+            "type": "string"
+          },
+          "source": {
+            "const": "postgis",
+            "title": "Source",
+            "type": "string"
+          },
+          "success": {
+            "const": true,
+            "title": "Success",
+            "type": "boolean"
+          },
+          "table": {
+            "title": "Table",
+            "type": "string"
+          },
+          "type": {
+            "const": "analysis_result",
+            "title": "Type",
+            "type": "string"
+          },
+          "unit": {
+            "title": "Unit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "operation",
+          "source",
+          "table",
+          "distance",
+          "unit",
+          "count",
+          "geojson",
+          "success"
+        ],
+        "title": "BufferAnalisisResponse",
+        "type": "object"
+      },
+      "ConteoRequest": {
+        "properties": {
+          "filter_column": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Filter Column"
+          },
+          "filter_operator": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "=, !=, >, <, >=, <=, LIKE, ILIKE",
+            "title": "Filter Operator"
+          },
+          "filter_value": {
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Filter Value"
+          },
+          "layer": {
+            "minLength": 1,
+            "title": "Layer",
+            "type": "string"
+          }
+        },
+        "required": [
+          "layer"
+        ],
+        "title": "ConteoRequest",
+        "type": "object"
+      },
+      "ConteoResponse": {
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "filter": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Filter"
+          },
+          "layer": {
+            "title": "Layer",
+            "type": "string"
+          },
+          "operation": {
+            "const": "count_features",
+            "title": "Operation",
+            "type": "string"
+          },
+          "success": {
+            "const": true,
+            "title": "Success",
+            "type": "boolean"
+          },
+          "type": {
+            "const": "analysis_result",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "operation",
+          "layer",
+          "count",
+          "filter",
+          "success"
+        ],
+        "title": "ConteoResponse",
+        "type": "object"
+      },
+      "DistanciaRequest": {
+        "properties": {
+          "geom_column": {
+            "default": "geom",
+            "title": "Geom Column",
+            "type": "string"
+          },
+          "latitude": {
+            "maximum": 90.0,
+            "minimum": -90.0,
+            "title": "Latitude",
+            "type": "number"
+          },
+          "limit": {
+            "default": 50,
+            "exclusiveMinimum": 0.0,
+            "maximum": 200.0,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "longitude": {
+            "maximum": 180.0,
+            "minimum": -180.0,
+            "title": "Longitude",
+            "type": "number"
+          },
+          "max_distance": {
+            "default": 500,
+            "description": "Metros de Web Mercator (EPSG:3857), no metros reales",
+            "exclusiveMinimum": 0.0,
+            "maximum": 1000000.0,
+            "title": "Max Distance",
+            "type": "number"
+          },
+          "table": {
+            "minLength": 1,
+            "title": "Table",
+            "type": "string"
+          }
+        },
+        "required": [
+          "table",
+          "longitude",
+          "latitude"
+        ],
+        "title": "DistanciaRequest",
+        "type": "object"
+      },
+      "DistanciaResponse": {
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "features": {
+            "description": "distance_m en metros de Web Mercator",
+            "items": {
+              "additionalProperties": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "type": "object"
+            },
+            "title": "Features",
+            "type": "array"
+          },
+          "geojson": {
+            "$ref": "#/components/schemas/FeatureCollection"
+          },
+          "max_distance": {
+            "title": "Max Distance",
+            "type": "number"
+          },
+          "operation": {
+            "const": "distance",
+            "title": "Operation",
+            "type": "string"
+          },
+          "reference": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "title": "Reference",
+            "type": "object"
+          },
+          "success": {
+            "const": true,
+            "title": "Success",
+            "type": "boolean"
+          },
+          "table": {
+            "title": "Table",
+            "type": "string"
+          },
+          "type": {
+            "const": "analysis_result",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "operation",
+          "table",
+          "reference",
+          "max_distance",
+          "count",
+          "features",
+          "geojson",
+          "success"
+        ],
+        "title": "DistanciaResponse",
+        "type": "object"
+      },
+      "ErrorAnalisisBody": {
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "title": "ErrorAnalisisBody",
+        "type": "object"
+      },
+      "ErrorAnalisisResponse": {
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/ErrorAnalisisBody"
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "title": "ErrorAnalisisResponse",
+        "type": "object"
+      },
+      "EstadisticasRequest": {
+        "properties": {
+          "column": {
+            "default": "id",
+            "minLength": 1,
+            "title": "Column",
+            "type": "string"
+          },
+          "group_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Group By"
+          },
+          "layer": {
+            "minLength": 1,
+            "title": "Layer",
+            "type": "string"
+          }
+        },
+        "required": [
+          "layer"
+        ],
+        "title": "EstadisticasRequest",
+        "type": "object"
+      },
+      "EstadisticasResponse": {
+        "description": "Sin group_by trae count/min/max/avg/sum/stddev; con group_by, `groups` (top 50).",
+        "properties": {
+          "avg": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg"
+          },
+          "column": {
+            "title": "Column",
+            "type": "string"
+          },
+          "count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Count"
+          },
+          "group_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Group By"
+          },
+          "groups": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Groups"
+          },
+          "layer": {
+            "title": "Layer",
+            "type": "string"
+          },
+          "max": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max"
+          },
+          "min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min"
+          },
+          "operation": {
+            "const": "statistics",
+            "title": "Operation",
+            "type": "string"
+          },
+          "stddev": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stddev"
+          },
+          "success": {
+            "const": true,
+            "title": "Success",
+            "type": "boolean"
+          },
+          "sum": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sum"
+          },
+          "type": {
+            "const": "analysis_result",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "operation",
+          "layer",
+          "column",
+          "success"
+        ],
+        "title": "EstadisticasResponse",
+        "type": "object"
+      },
+      "FeatureCollection": {
+        "properties": {
+          "features": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Features",
+            "type": "array"
+          },
+          "type": {
+            "const": "FeatureCollection",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "features"
+        ],
+        "title": "FeatureCollection",
+        "type": "object"
+      },
+      "FiltroRequest": {
+        "properties": {
+          "column": {
+            "description": "Columna, o \"__search__\" para buscar en todas las de texto",
+            "minLength": 1,
+            "title": "Column",
+            "type": "string"
+          },
+          "geom_column": {
+            "default": "geom",
+            "title": "Geom Column",
+            "type": "string"
+          },
+          "layer": {
+            "minLength": 1,
+            "title": "Layer",
+            "type": "string"
+          },
+          "limit": {
+            "default": 100,
+            "exclusiveMinimum": 0.0,
+            "maximum": 500.0,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "operator": {
+            "default": "=",
+            "description": "=, !=, >, <, >=, <=, LIKE, ILIKE (se ignora en __search__)",
+            "title": "Operator",
+            "type": "string"
+          },
+          "value": {
+            "title": "Value"
+          }
+        },
+        "required": [
+          "layer",
+          "column",
+          "value"
+        ],
+        "title": "FiltroRequest",
+        "type": "object"
+      },
+      "FiltroResponse": {
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "features": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Features",
+            "type": "array"
+          },
+          "filter": {
+            "title": "Filter",
+            "type": "string"
+          },
+          "geojson": {
+            "$ref": "#/components/schemas/FeatureCollection"
+          },
+          "layer": {
+            "title": "Layer",
+            "type": "string"
+          },
+          "operation": {
+            "const": "filter_features",
+            "title": "Operation",
+            "type": "string"
+          },
+          "success": {
+            "const": true,
+            "title": "Success",
+            "type": "boolean"
+          },
+          "type": {
+            "const": "analysis_result",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "operation",
+          "layer",
+          "filter",
+          "count",
+          "features",
+          "geojson",
+          "success"
+        ],
+        "title": "FiltroResponse",
+        "type": "object"
+      },
+      "InterseccionRequest": {
+        "properties": {
+          "geom_column": {
+            "default": "geom",
+            "title": "Geom Column",
+            "type": "string"
+          },
+          "limit": {
+            "default": 100,
+            "exclusiveMinimum": 0.0,
+            "maximum": 500.0,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "table1": {
+            "minLength": 1,
+            "title": "Table1",
+            "type": "string"
+          },
+          "table2": {
+            "minLength": 1,
+            "title": "Table2",
+            "type": "string"
+          }
+        },
+        "required": [
+          "table1",
+          "table2"
+        ],
+        "title": "InterseccionRequest",
+        "type": "object"
+      },
+      "InterseccionResponse": {
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "geojson": {
+            "$ref": "#/components/schemas/FeatureCollection"
+          },
+          "operation": {
+            "const": "intersect",
+            "title": "Operation",
+            "type": "string"
+          },
+          "success": {
+            "const": true,
+            "title": "Success",
+            "type": "boolean"
+          },
+          "table1": {
+            "title": "Table1",
+            "type": "string"
+          },
+          "table2": {
+            "title": "Table2",
+            "type": "string"
+          },
+          "type": {
+            "const": "analysis_result",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "operation",
+          "table1",
+          "table2",
+          "count",
+          "geojson",
+          "success"
+        ],
+        "title": "InterseccionResponse",
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "title": "GIS Backend API · analisis",
+    "version": "snapshot"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/api/v1/analisis/buffer": {
+      "post": {
+        "description": "Buffer en metros reales sobre una capa; el resultado sale en EPSG:4326.",
+        "operationId": "analisis_buffer_api_v1_analisis_buffer_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BufferAnalisisRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BufferAnalisisResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorAnalisisResponse"
+                }
+              }
+            },
+            "description": "consulta_rechazada: PostgreSQL rechazó la consulta"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorAnalisisResponse"
+                }
+              }
+            },
+            "description": "capa_no_consultable · columna_inexistente · sin_columnas_texto, o body inválido (formato FastAPI)"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorAnalisisResponse"
+                }
+              }
+            },
+            "description": "error_interno"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorAnalisisResponse"
+                }
+              }
+            },
+            "description": "bd_no_disponible"
+          }
+        },
+        "summary": "Analisis Buffer"
+      }
+    },
+    "/api/v1/analisis/conteo": {
+      "post": {
+        "description": "Número de registros; el filtro se aplica solo si llegan los tres campos.",
+        "operationId": "analisis_conteo_api_v1_analisis_conteo_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConteoRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConteoResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorAnalisisResponse"
+                }
+              }
+            },
+            "description": "consulta_rechazada: PostgreSQL rechazó la consulta"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorAnalisisResponse"
+                }
+              }
+            },
+            "description": "capa_no_consultable · columna_inexistente · sin_columnas_texto, o body inválido (formato FastAPI)"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorAnalisisResponse"
+                }
+              }
+            },
+            "description": "error_interno"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorAnalisisResponse"
+                }
+              }
+            },
+            "description": "bd_no_disponible"
+          }
+        },
+        "summary": "Analisis Conteo"
+      }
+    },
+    "/api/v1/analisis/distancia": {
+      "post": {
+        "description": "Features a menos de `max_distance` de un punto, ordenadas por distancia.\n\nMide en EPSG:3857: `max_distance` y `distance_m` son metros de Web Mercator,\nque difieren de los reales en un factor 1/cos(lat). Para metros reales usa\n`GET /api/v1/espacial/elementos/radio`.",
+        "operationId": "analisis_distancia_api_v1_analisis_distancia_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DistanciaRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DistanciaResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorAnalisisResponse"
+                }
+              }
+            },
+            "description": "consulta_rechazada: PostgreSQL rechazó la consulta"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorAnalisisResponse"
+                }
+              }
+            },
+            "description": "capa_no_consultable · columna_inexistente · sin_columnas_texto, o body inválido (formato FastAPI)"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorAnalisisResponse"
+                }
+              }
+            },
+            "description": "error_interno"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorAnalisisResponse"
+                }
+              }
+            },
+            "description": "bd_no_disponible"
+          }
+        },
+        "summary": "Analisis Distancia"
+      }
+    },
+    "/api/v1/analisis/estadisticas": {
+      "post": {
+        "description": "Estadísticas de una columna numérica, globales o por `group_by` (top 50).",
+        "operationId": "analisis_estadisticas_api_v1_analisis_estadisticas_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EstadisticasRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EstadisticasResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorAnalisisResponse"
+                }
+              }
+            },
+            "description": "consulta_rechazada: PostgreSQL rechazó la consulta"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorAnalisisResponse"
+                }
+              }
+            },
+            "description": "capa_no_consultable · columna_inexistente · sin_columnas_texto, o body inválido (formato FastAPI)"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorAnalisisResponse"
+                }
+              }
+            },
+            "description": "error_interno"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorAnalisisResponse"
+                }
+              }
+            },
+            "description": "bd_no_disponible"
+          }
+        },
+        "summary": "Analisis Estadisticas"
+      }
+    },
+    "/api/v1/analisis/filtro": {
+      "post": {
+        "description": "Filtro por atributo, o búsqueda libre sin tildes con `column=\"__search__\"`.",
+        "operationId": "analisis_filtro_api_v1_analisis_filtro_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FiltroRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FiltroResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorAnalisisResponse"
+                }
+              }
+            },
+            "description": "consulta_rechazada: PostgreSQL rechazó la consulta"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorAnalisisResponse"
+                }
+              }
+            },
+            "description": "capa_no_consultable · columna_inexistente · sin_columnas_texto, o body inválido (formato FastAPI)"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorAnalisisResponse"
+                }
+              }
+            },
+            "description": "error_interno"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorAnalisisResponse"
+                }
+              }
+            },
+            "description": "bd_no_disponible"
+          }
+        },
+        "summary": "Analisis Filtro"
+      }
+    },
+    "/api/v1/analisis/interseccion": {
+      "post": {
+        "description": "Features de `table1` que intersectan alguna geometría de `table2`.",
+        "operationId": "analisis_interseccion_api_v1_analisis_interseccion_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InterseccionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InterseccionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorAnalisisResponse"
+                }
+              }
+            },
+            "description": "consulta_rechazada: PostgreSQL rechazó la consulta"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorAnalisisResponse"
+                }
+              }
+            },
+            "description": "capa_no_consultable · columna_inexistente · sin_columnas_texto, o body inválido (formato FastAPI)"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorAnalisisResponse"
+                }
+              }
+            },
+            "description": "error_interno"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorAnalisisResponse"
+                }
+              }
+            },
+            "description": "bd_no_disponible"
+          }
+        },
+        "summary": "Analisis Interseccion"
+      }
+    }
+  }
+}

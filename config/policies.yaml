@@ -1,0 +1,25 @@
+# Políticas de ejecución de tools del agente
+# ===========================================
+# Modos:
+#   auto      la tool se ejecuta sin intervención (todas las actuales son lecturas)
+#   approval  requiere aprobación humana. Mientras no exista el flujo de
+#             aprobaciones (pendiente, ver docs/desacople/03-resultado.md), la
+#             tool NO se ejecuta y el modelo recibe un error explicándolo.
+#   blocked   nunca se ejecuta
+#
+# Una tool que no aparece aquí usa `default`. Toda tool futura que ESCRIBA en
+# el backend debe declararse `approval` y enviar Idempotency-Key (contrato §4).
+
+default: blocked
+
+tools:
+  # Lectura vía backend (/api/v1/analisis/*)
+  buffer_analysis: auto
+  distance: auto
+  intersect: auto
+  count_features: auto
+  filter_features: auto
+  statistics: auto
+  # Solo generan un payload para el mapa, no tocan el backend
+  highlight_features: auto
+  zoom_layer: auto

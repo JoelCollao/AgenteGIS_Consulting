@@ -1,0 +1,65 @@
+# Casos de comportamiento del agente GIS
+# =======================================
+# Cada caso fija QUÉ debe hacer el agente, no el texto exacto:
+#   expect.tools         tools que debe invocar (en cualquier orden); [] = ninguna
+#   expect.args          subconjunto de argumentos esperado por tool
+#   expect.reply_contains  fragmentos que deben aparecer en la respuesta (minúsculas)
+# El backend está simulado (respuestas en la clave `backend`), así que solo se mide la
+# decisión del modelo. Se ejecutan con:  python evals/run_evals.py
+# Requiere un proveedor LLM configurado (.env); cuesta tokens.
+
+cases:
+  - id: concepto_sin_tools
+    message: "¿Qué es un buffer en GIS?"
+    expect:
+      tools: []
+
+  - id: fuera_de_alcance
+    message: "Dame una receta de ceviche"
+    expect:
+      tools: []
+      reply_contains: ["gis"]
+
+  - id: conteo_simple
+    message: "¿Cuántos registros tiene la capa puntos?"
+    expect:
+      tools: [count_features]
+      args: {count_features: {layer: puntos}}
+
+  - id: buffer_postgis
+    message: "Créame un buffer de 50 metros de la capa predios"
+    expect:
+      tools: [buffer_analysis]
+      args: {buffer_analysis: {table: predios, distance: 50}}
+
+  - id: filtro_atributo
+    message: "Filtra los edificios con pisos mayor a 3"
+    expect:
+      tools: [filter_features]
+      args: {filter_features: {layer: edificios, column: pisos, operator: ">"}}
+
+  - id: estadisticas_agrupadas
+    message: "Dame el área promedio de las parcelas por tipo de uso"
+    expect:
+      tools: [statistics]
+      args: {statistics: {layer: parcelas}}
+
+  - id: capas_del_mapa_sin_llm
+    message: "¿Cuántas capas hay en el mapa?"
+    context:
+      layersData:
+        totalVisibleLayers: 2
+        totalFeatures: 30
+        layers:
+          - {name: puntos, geometryType: Point, featureCount: 21, fields: [id, tipo]}
+          - {name: predios, geometryType: Polygon, featureCount: 9, fields: [id, area]}
+    expect:
+      tools: []
+      reply_contains: ["2 capas"]
+
+backend:
+  # Respuesta simulada por ruta del contrato
+  /api/v1/analisis/conteo: {type: analysis_result, operation: count_features, layer: puntos, count: 21, filter: null, success: true}
+  /api/v1/analisis/buffer: {type: analysis_result, operation: buffer_analysis, source: postgis, table: predios, distance: 50, unit: meters, count: 1, geojson: {type: FeatureCollection, features: []}, success: true}
+  /api/v1/analisis/filtro: {type: analysis_result, operation: filter_features, layer: edificios, filter: 'pisos > 3', count: 0, features: [], geojson: {type: FeatureCollection, features: []}, success: true}
+  /api/v1/analisis/estadisticas: {type: analysis_result, operation: statistics, layer: parcelas, column: area, group_by: uso, groups: [], success: true}

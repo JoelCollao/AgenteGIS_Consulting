@@ -1,0 +1,257 @@
+[
+  {
+    "type": "function",
+    "function": {
+      "name": "buffer_analysis",
+      "description": "Crea un buffer (zona de influencia) alrededor de las geometrías de una capa. Funciona con capas en PostGIS (parámetro 'table') o con archivos importados en el frontend como .geojson/.kml/.shp (las features se inyectan automáticamente desde el contexto). Si la capa viene de un archivo importado, NO enviar 'table'.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "table": {
+            "type": "string",
+            "description": "Nombre de la tabla PostGIS. Usar SOLO si la capa está en la base de datos. No incluir extensiones de archivo (.geojson, .shp). Omitir si la capa es un archivo importado en el frontend."
+          },
+          "distance": {
+            "type": "number",
+            "description": "Distancia del buffer en la unidad indicada."
+          },
+          "unit": {
+            "type": "string",
+            "enum": [
+              "meters",
+              "km",
+              "miles"
+            ],
+            "description": "Unidad de la distancia. Default: meters."
+          },
+          "dissolve": {
+            "type": "boolean",
+            "description": "Si true, fusiona todos los buffers en una sola geometría."
+          }
+        },
+        "required": [
+          "distance"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "filter_features",
+      "description": "Filtra features de una capa PostGIS por un campo y valor. Soporta operadores de comparación y búsqueda libre en columnas de texto.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "layer": {
+            "type": "string",
+            "description": "Nombre de la capa/tabla a filtrar."
+          },
+          "column": {
+            "type": "string",
+            "description": "Columna sobre la que aplicar el filtro. Usar '__search__' para búsqueda libre en todas las columnas de texto."
+          },
+          "operator": {
+            "type": "string",
+            "enum": [
+              "=",
+              "!=",
+              ">",
+              "<",
+              ">=",
+              "<=",
+              "LIKE",
+              "ILIKE"
+            ],
+            "description": "Operador de comparación. Default: '='."
+          },
+          "value": {
+            "type": "string",
+            "description": "Valor a comparar o término de búsqueda."
+          }
+        },
+        "required": [
+          "layer",
+          "column",
+          "value"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "count_features",
+      "description": "Cuenta el número de registros/features en una capa PostGIS, opcionalmente con un filtro por columna.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "layer": {
+            "type": "string",
+            "description": "Nombre de la capa/tabla."
+          },
+          "filter_column": {
+            "type": "string",
+            "description": "Columna para filtrar (opcional)."
+          },
+          "filter_operator": {
+            "type": "string",
+            "enum": [
+              "=",
+              "!=",
+              ">",
+              "<",
+              ">=",
+              "<=",
+              "LIKE",
+              "ILIKE"
+            ],
+            "description": "Operador de comparación para el filtro."
+          },
+          "filter_value": {
+            "type": "string",
+            "description": "Valor para el filtro."
+          }
+        },
+        "required": [
+          "layer"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "statistics",
+      "description": "Calcula estadísticas descriptivas (min, max, avg, sum, count, stddev) sobre una columna numérica de una capa PostGIS. Soporta agrupación.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "layer": {
+            "type": "string",
+            "description": "Nombre de la capa/tabla."
+          },
+          "column": {
+            "type": "string",
+            "description": "Columna numérica a analizar."
+          },
+          "group_by": {
+            "type": "string",
+            "description": "Columna categórica para agrupar resultados (opcional)."
+          }
+        },
+        "required": [
+          "layer",
+          "column"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "intersect",
+      "description": "Encuentra features de una capa que intersectan espacialmente con otra capa. Retorna los features intersectados como GeoJSON.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "table1": {
+            "type": "string",
+            "description": "Primera tabla (features a seleccionar)."
+          },
+          "table2": {
+            "type": "string",
+            "description": "Segunda tabla (máscara de intersección)."
+          }
+        },
+        "required": [
+          "table1",
+          "table2"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "distance",
+      "description": "Busca features dentro de un radio máximo desde un punto de referencia (coordenadas). Retorna features ordenados por proximidad con distancia en metros.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "table": {
+            "type": "string",
+            "description": "Nombre de la capa/tabla."
+          },
+          "longitude": {
+            "type": "number",
+            "description": "Longitud del punto de referencia (WGS84)."
+          },
+          "latitude": {
+            "type": "number",
+            "description": "Latitud del punto de referencia (WGS84)."
+          },
+          "max_distance": {
+            "type": "number",
+            "description": "Radio máximo de búsqueda en metros."
+          }
+        },
+        "required": [
+          "table",
+          "longitude",
+          "latitude",
+          "max_distance"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "highlight_features",
+      "description": "Genera una instrucción para que el frontend resalte features específicos en el visor cartográfico con un estilo personalizado.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "layer": {
+            "type": "string",
+            "description": "Nombre de la capa cuyos features se quieren resaltar."
+          },
+          "feature_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            },
+            "description": "IDs de features a resaltar. Vacío = toda la capa."
+          }
+        },
+        "required": [
+          "layer"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "zoom_layer",
+      "description": "Genera una instrucción para que el frontend ajuste el zoom y encuadre del visor cartográfico a una capa específica.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "layer": {
+            "type": "string",
+            "description": "Nombre de la capa a enfocar."
+          },
+          "zoom": {
+            "type": "integer",
+            "description": "Nivel de zoom objetivo (0-20). Opcional."
+          }
+        },
+        "required": [
+          "layer"
+        ]
+      }
+    }
+  }
+]

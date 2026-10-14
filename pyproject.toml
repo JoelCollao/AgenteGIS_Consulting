@@ -1,0 +1,50 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agent-service"
+version = "1.0.0"
+description = "Orquestación de agentes de IA (LangGraph + function calling) sobre la API del backend GIS"
+requires-python = ">=3.11"
+# Versiones = las que ya usaba el backend (requirements.lock). Sin drivers de
+# base de datos: sqlalchemy, psycopg2, asyncpg y geoalchemy2 están prohibidos
+# aquí (ver [tool.importlinter]).
+dependencies = [
+    "fastapi==0.115.12",
+    "uvicorn[standard]==0.34.3",
+    "pydantic==2.12.5",
+    "python-dotenv==1.2.1",
+    "PyJWT==2.13.0",
+    "httpx==0.28.1",
+    "PyYAML==6.0.3",
+    "openai>=2.8.0",
+    "azure-identity==1.20.0",
+    "azure-ai-projects>=2.0.0b4",
+    "langgraph==1.0.9",
+    "azure-monitor-opentelemetry==1.6.13",
+    # Buffer in-memory sobre features del frontend (decisión P2)
+    "shapely==2.1.2",
+    "pyproj==3.7.2",
+]
+
+[project.optional-dependencies]
+dev = ["pytest", "import-linter", "pylint", "black", "isort"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+agent_service = ["prompts/*.md", "prompts/*.json"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.black]
+line-length = 88
+target-version = ["py311"]
+
+[tool.isort]
+profile = "black"
+known_first_party = ["agent_service"]
