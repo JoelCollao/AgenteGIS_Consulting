@@ -16,7 +16,7 @@ frontend ──POST /api/v1/orchestrator──► agent-service ──POST /api/
 |---|---|
 | `src/agent_service/main.py` | punto de entrada: FastAPI, middlewares y cableado de dependencias |
 | `config.py` | settings desde el entorno (sin BD) |
-| `api/` | `POST /api/v1/orchestrator` (chat), `/api/ai/*` (deprecados), health, validación del JWT |
+| `api/` | `POST /api/v1/orchestrator` (chat), health, validación del JWT |
 | `orchestrator/` | grafo LangGraph: IntentRouter → MapContext \| GISAgent → Validator |
 | `agents/` | `agente_consulta_gis.py`: rol, prompt y lista cerrada de tools del agente GIS |
 | `prompts/` | `gis_system.md` (system prompt) y `gis_tools.json` (esquemas de function calling) |

@@ -18,6 +18,7 @@ import logging
 import re
 
 from agent_service.agents.agente_consulta_gis import AgenteConsultaGIS
+from agent_service.agents.layers import match_layer, normalize_name
 
 logger = logging.getLogger(__name__)
 
@@ -111,19 +112,6 @@ class MapContextAgent:
     def _build_reply(self, msg, layers, total_visible, total_features):
         """Construye respuesta en lenguaje natural según la pregunta."""
 
-        def _norm(s: str) -> str:
-            return re.sub(r"[\s_\-]+", " ", s.lower()).strip()
-
-        def _find_layer(hint: str):
-            hint_norm = _norm(hint)
-            for lyr in layers:
-                if _norm(lyr.get("name", "")) == hint_norm:
-                    return lyr
-            for lyr in layers:
-                if hint_norm in _norm(lyr.get("name", "")):
-                    return lyr
-            return None
-
         def _layer_from_msg():
             m = re.search(
                 r"(?:capa|layer)\s+(?:de\s+(?:la\s+)?|del?\s+|la\s+|el\s+)?"
@@ -131,11 +119,11 @@ class MapContextAgent:
                 msg, re.IGNORECASE,
             )
             if m:
-                found = _find_layer(m.group(1).strip())
+                found = match_layer(m.group(1).strip(), layers)
                 if found:
                     return found
             for lyr in layers:
-                if _norm(lyr.get("name", "")) in _norm(msg):
+                if normalize_name(lyr.get("name", "")) in normalize_name(msg):
                     return lyr
             return None
 

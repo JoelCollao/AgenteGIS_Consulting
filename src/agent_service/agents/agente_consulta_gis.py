@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
 from agent_service.agents.iai_agent import IAIAgent
+from agent_service.agents.layers import match_layer, normalize_name
 from agent_service.models.illm_provider import ILLMProvider, LLMResponse, LLMToolCall
 from agent_service.prompts import GIS_SYSTEM_PROMPT, GIS_TOOL_DEFINITIONS
 from agent_service.tools.registry import execute_skill
@@ -25,10 +26,9 @@ from agent_service.tools.registry import execute_skill
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# Definición del agente: rol, prompt y lista CERRADA de tools
+# Definición del agente: prompt y lista CERRADA de tools
 # ---------------------------------------------------------------------------
 # El .env ya no se carga aquí: lo hace main.py una sola vez al arrancar.
-ROLE = "Asistente GIS: análisis geoespacial y cartografía sobre las capas del usuario"
 SYSTEM_PROMPT = GIS_SYSTEM_PROMPT  # prompts/gis_system.md
 # Mismo orden que el registro: aparece en el mensaje de "skill no disponible".
 TOOLS = (
@@ -478,21 +478,8 @@ class AgenteConsultaGIS(IAIAgent):
     @staticmethod
     def _match_layer(hint: str, layers: list) -> Optional[Dict]:
         """Busca la mejor coincidencia de capa por nombre fuzzy."""
-        import re as _re
-
-        if not hint:
-            # Sin hint no adivinamos: dejamos que _inject_frontend_features resuelva
-            return None
-
-        def _norm(s: str) -> str:
-            return _re.sub(r"[\s_\-]+", " ", s.lower()).strip()
-
-        hint_norm = _norm(hint)
-        for lyr in layers:
-            name = _norm(lyr.get("name", "")) if isinstance(lyr, dict) else _norm(str(lyr))
-            if name == hint_norm or hint_norm in name or name in hint_norm:
-                return lyr
-        return None
+        # Sin hint no adivinamos: dejamos que _inject_frontend_features resuelva
+        return match_layer(hint, layers, hint_may_contain_name=True)
 
     @staticmethod
     def _sanitize_table_name(name: str) -> str:
@@ -523,9 +510,6 @@ class AgenteConsultaGIS(IAIAgent):
         import re as _re
 
         target_name = (params.get("table") or "").strip()
-
-        def _norm(s: str) -> str:
-            return _re.sub(r"[\s_\-]+", " ", s.lower()).strip()
 
         def _strip_ext(s: str) -> str:
             return _re.sub(
@@ -568,10 +552,10 @@ class AgenteConsultaGIS(IAIAgent):
             return params
 
         # Buscar por nombre en layersGeojson
-        clean_name_norm = _norm(_strip_ext(target_name))
+        clean_name_norm = normalize_name(_strip_ext(target_name))
 
         for lg in layers_geojson:
-            lg_name_norm = _norm(_strip_ext(lg.get("name", "")))
+            lg_name_norm = normalize_name(_strip_ext(lg.get("name", "")))
             if (lg_name_norm == clean_name_norm
                     or clean_name_norm in lg_name_norm
                     or lg_name_norm in clean_name_norm):

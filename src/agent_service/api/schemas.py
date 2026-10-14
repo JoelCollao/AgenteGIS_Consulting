@@ -72,7 +72,3 @@ class OrchestratorResponse(BaseModel):
     result: Optional[str] = None
     error: Optional[Dict[str, Any]] = None
 
-
-class AIRequest(BaseModel):
-    message: str = Field(..., min_length=1)
-    context: Dict[str, Any] = Field(default_factory=dict)

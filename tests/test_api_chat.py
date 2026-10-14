@@ -4,7 +4,7 @@ JWT → grafo LangGraph → agente → tool → backend simulado.
 
 Comprueba lo que no ven los tests unitarios: que el JWT validado por la
 dependencia de FastAPI llega como Authorization a la llamada de la tool, que
-la respuesta conserva el contrato del frontend y que /api/ai/* sigue vivo.
+la respuesta conserva el contrato del frontend y que /health es público.
 """
 
 import time
@@ -60,11 +60,7 @@ def app_client(monkeypatch):
     graph = langgraph_flow.LangGraphOrchestrator()
     monkeypatch.setattr(langgraph_flow, "orchestrator", graph)
 
-    from agent_service.api import ai_routes
     from agent_service.main import create_app
-
-    # ai_routes enlaza el singleton al importarse
-    monkeypatch.setattr(ai_routes, "orchestrator", graph)
 
     seen = []
 
@@ -119,18 +115,6 @@ def test_chat_con_tool_reenvia_el_jwt_al_backend(app_client):
     assert call.headers["authorization"] == f"Bearer {token}"
     assert call.headers["x-request-id"] == "req-e2e"
     assert call.headers["x-session-id"] == "s1"
-
-
-def test_ai_chat_deprecado_sigue_respondiendo(app_client):
-    client, llm, _ = app_client
-    llm.script[:] = [LLMResponse(content="hola")]
-    r = client.post("/api/ai/chat", json={"message": "hola"},
-                    headers={"Authorization": f"Bearer {_token()}"})
-    assert r.status_code == 200
-    assert r.json()["reply"] == "hola"
-
-    spec = client.get("/openapi.json").json()
-    assert spec["paths"]["/api/ai/chat"]["post"]["deprecated"] is True
 
 
 def test_health_es_publico(app_client):

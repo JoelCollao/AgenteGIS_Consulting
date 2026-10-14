@@ -4,13 +4,12 @@ agent-service — punto de entrada
 Cablea las dependencias y expone la API del agente:
 
   POST /api/v1/orchestrator         chat principal (lo usa el frontend)
-  POST /api/ai/{chat,gis-query,report}  deprecados (P4)
   GET  /api/v1/health, /api/v1/ready
 
 Dependencias que se construyen aquí:
   · BackendClient (httpx) → tools/base.set_backend_client
   · PolicyEngine (config/policies.yaml) → policies.engine.set_policy_engine
-  · Proveedor LLM (singleton de agent_service.models), precalentado en startup
+  · Proveedor LLM (singleton de agent_service.models), precalentado en el lifespan
 
 Ejecutar: uvicorn agent_service.main:app --port 8001
 """
@@ -22,6 +21,7 @@ import sys
 import threading
 import time as _time
 import uuid
+from contextlib import asynccontextmanager
 
 from dotenv import load_dotenv
 
@@ -62,6 +62,60 @@ def _redactar_body(data):
     return data
 
 
+# ── Dependencias del proceso ─────────────────────────────────────────────
+@asynccontextmanager
+async def _lifespan(_app: FastAPI):
+    """Arranque y cierre en un solo sitio; el `finally` garantiza el cierre."""
+    from agent_service.clients.backend import BackendClient
+    from agent_service.policies.engine import PolicyEngine, set_policy_engine
+    from agent_service.tools.base import set_backend_client
+
+    set_backend_client(
+        BackendClient(
+            settings.backend_url,
+            connect_timeout=settings.backend_connect_timeout,
+            read_timeout=settings.backend_read_timeout,
+            max_connections=settings.backend_max_connections,
+        )
+    )
+    set_policy_engine(PolicyEngine.from_file(settings.policies_file or None))
+    logger.info("Backend: %s", settings.backend_url)
+
+    # Warm-up del proveedor LLM en un hilo (movido desde app.py del
+    # backend): las credenciales de Entra ID pueden tardar en frío.
+    def _connect():
+        try:
+            from agent_service.models import default_llm_provider
+
+            provider = default_llm_provider()
+            if provider.is_available():
+                logger.info("Proveedor LLM listo: %s", provider.get_provider_type())
+            else:
+                logger.warning("Proveedor LLM no disponible todavía (%s)", provider.get_last_error())
+        except Exception as exc:  # pylint: disable=broad-except
+            logger.warning("No se pudo precalentar el proveedor LLM: %s", exc)
+
+    threading.Thread(target=_connect, daemon=True).start()
+
+    try:
+        yield
+    finally:
+        from agent_service.tools.base import backend, set_backend_client
+
+        try:
+            await backend().aclose()
+        except RuntimeError:
+            pass
+        set_backend_client(None)
+
+        from agent_service.models import default_llm_provider
+
+        try:
+            await default_llm_provider().aclose()
+        except Exception as exc:  # pylint: disable=broad-except
+            logger.warning("No se pudo cerrar el cliente LLM: %s", exc)
+
+
 def create_app() -> FastAPI:
     app = FastAPI(
         title="GIS Agent Service",
@@ -69,6 +123,7 @@ def create_app() -> FastAPI:
         version="1.0.0",
         docs_url="/docs",
         redoc_url="/redoc",
+        lifespan=_lifespan,
     )
 
     # ── CORS (mismo criterio que el backend) ─────────────────────────────
@@ -144,7 +199,7 @@ def create_app() -> FastAPI:
         return JSONResponse(status_code=500, content=content)
 
     # ── Routers ──────────────────────────────────────────────────────────
-    from agent_service.api import ai_routes, health, orchestrator
+    from agent_service.api import health, orchestrator
     from agent_service.api.auth import get_current_user, resolve_jwt_secret
 
     try:
@@ -156,64 +211,12 @@ def create_app() -> FastAPI:
     auth_required = [Depends(get_current_user)]
     app.include_router(health.router, prefix="/api/v1", tags=["Health"])
     app.include_router(orchestrator.router, prefix="/api/v1", tags=["Orchestrator"], dependencies=auth_required)
-    app.include_router(ai_routes.router, prefix="/api", tags=["AI (deprecado)"], dependencies=auth_required)
 
     try:
         if configure_telemetry(app):
             logger.info("Telemetría OpenTelemetry → Application Insights activa")
     except Exception as e:  # pylint: disable=broad-except
         logger.warning("No se pudo activar la telemetría: %s", e)
-
-    # ── Dependencias del proceso ─────────────────────────────────────────
-    @app.on_event("startup")
-    async def _wire_dependencies():
-        from agent_service.clients.backend import BackendClient
-        from agent_service.policies.engine import PolicyEngine, set_policy_engine
-        from agent_service.tools.base import set_backend_client
-
-        set_backend_client(
-            BackendClient(
-                settings.backend_url,
-                connect_timeout=settings.backend_connect_timeout,
-                read_timeout=settings.backend_read_timeout,
-                max_connections=settings.backend_max_connections,
-            )
-        )
-        set_policy_engine(PolicyEngine.from_file(settings.policies_file or None))
-        logger.info("Backend: %s", settings.backend_url)
-
-        # Warm-up del proveedor LLM en un hilo (movido desde app.py del
-        # backend): las credenciales de Entra ID pueden tardar en frío.
-        def _connect():
-            try:
-                from agent_service.models import default_llm_provider
-
-                provider = default_llm_provider()
-                if provider.is_available():
-                    logger.info("Proveedor LLM listo: %s", provider.get_provider_type())
-                else:
-                    logger.warning("Proveedor LLM no disponible todavía (%s)", provider.get_last_error())
-            except Exception as exc:  # pylint: disable=broad-except
-                logger.warning("No se pudo precalentar el proveedor LLM: %s", exc)
-
-        threading.Thread(target=_connect, daemon=True).start()
-
-    @app.on_event("shutdown")
-    async def _close_dependencies():
-        from agent_service.tools.base import backend, set_backend_client
-
-        try:
-            await backend().aclose()
-        except RuntimeError:
-            pass
-        set_backend_client(None)
-
-        from agent_service.models import default_llm_provider
-
-        try:
-            await default_llm_provider().aclose()
-        except Exception as exc:  # pylint: disable=broad-except
-            logger.warning("No se pudo cerrar el cliente LLM: %s", exc)
 
     return app
 
