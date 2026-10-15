@@ -166,7 +166,7 @@ class LangGraphOrchestrator:
         # Propagar campos extra generados por skills (buffer, filtro, etc.)
         for extra_key in (
             "agent", "bufferGeojson", "filteredGeojson", "newLayerId", "layerName",
-            "tools_executed",
+            "tools_executed", "error",
         ):
             if extra_key in result_data:
                 response[extra_key] = result_data[extra_key]

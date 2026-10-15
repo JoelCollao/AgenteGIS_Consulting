@@ -31,6 +31,8 @@ class Settings:
     port: int = 8001
     cors_allowed_origins: List[str] = field(default_factory=list)
     debug_errors: bool = False
+    # Loguea el JSON que llega del frontend y el que se le responde (resumido)
+    log_payloads: bool = False
 
     # Backend (único origen de datos)
     backend_url: str = "http://localhost:5000"
@@ -57,6 +59,7 @@ def load_settings() -> Settings:
         port=int(os.getenv("PORT", "8001")),
         cors_allowed_origins=_env_list("CORS_ALLOWED_ORIGINS"),
         debug_errors=_env_bool("DEBUG_ERRORS", False),
+        log_payloads=_env_bool("LOG_PAYLOADS", False),
         backend_url=(os.getenv("BACKEND_URL") or "http://localhost:5000").rstrip("/"),
         backend_connect_timeout=float(os.getenv("BACKEND_CONNECT_TIMEOUT", "5")),
         backend_read_timeout=float(os.getenv("BACKEND_READ_TIMEOUT", "30")),

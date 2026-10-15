@@ -194,6 +194,9 @@ class LLMConfig:
     # usa su valor por defecto). Solo para modelos de razonamiento: gpt-4.1 y
     # similares rechazan el parámetro con un 400.
     reasoning_effort: Optional[str] = None
+    # Tope de tokens de salida (None = no se envía). Sin él, OpenRouter
+    # reserva la salida máxima del modelo y responde 402 con poco saldo.
+    max_tokens: Optional[int] = None
 
     def describe(self) -> str:
         """Resumen para logs — nunca incluye la API key."""
@@ -324,6 +327,20 @@ def _resolve_reasoning_effort(preset: Dict[str, Any]) -> Optional[str]:
     return value
 
 
+def _resolve_max_tokens(preset: Dict[str, Any]) -> Optional[int]:
+    """LLM_MAX_TOKENS gana sobre el preset; vacío = no enviar."""
+    value = str(os.getenv("LLM_MAX_TOKENS") or preset.get("max_tokens") or "").strip()
+    if not value:
+        return None
+    try:
+        tokens = int(value)
+    except ValueError:
+        tokens = 0
+    if tokens <= 0:
+        raise ValueError(f"LLM_MAX_TOKENS='{value}' no es válido: debe ser un entero > 0.")
+    return tokens
+
+
 def load_llm_config() -> LLMConfig:
     """Resuelve la configuración del LLM desde el entorno y los presets."""
     presets = _load_presets()
@@ -387,6 +404,7 @@ def load_llm_config() -> LLMConfig:
         headers=dict(preset.get("headers") or {}),
         extra_body=dict(preset.get("extra_body") or {}),
         reasoning_effort=_resolve_reasoning_effort(preset),
+        max_tokens=_resolve_max_tokens(preset),
     )
 
     # Modelos de reserva (OpenRouter): [principal, *reserva] en `models`.

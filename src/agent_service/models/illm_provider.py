@@ -22,7 +22,7 @@ responsable de traducir en ambos sentidos dentro de su implementación.
 import asyncio
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 
 @dataclass
@@ -129,6 +129,27 @@ class ILLMProvider(ABC):
         el timeout cancele de verdad la petición.
         """
         return await asyncio.to_thread(self.chat, messages, tools, tool_choice, timeout)
+
+    async def astream_chat(
+        self,
+        messages: List[Dict[str, Any]],
+        on_delta: Callable[[str], None],
+        tools: Optional[List[Dict[str, Any]]] = None,
+        tool_choice: str = "auto",
+        timeout: Optional[float] = None,
+    ) -> LLMResponse:
+        """
+        Como `achat`, pero va entregando el texto a `on_delta` según llega.
+
+        Devuelve la misma respuesta completa que `achat` (texto entero y tool
+        calls ya ensambladas), así el bucle del agente no cambia. Por defecto
+        no hay streaming real: se espera la respuesta y se entrega el texto de
+        una vez. Los adaptadores chat.completions lo sobreescriben.
+        """
+        response = await self.achat(messages, tools, tool_choice, timeout)
+        if response.content and not response.has_tool_calls:
+            on_delta(response.content)
+        return response
 
     async def aclose(self) -> None:
         """Libera clientes async del proveedor. Por defecto no hay nada que cerrar."""

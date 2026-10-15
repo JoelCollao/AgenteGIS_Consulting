@@ -16,9 +16,10 @@ def test_skill_fallida_con_respuesta_es_200():
 
 
 def test_codigos_de_error():
-    assert _http_status({"success": False, "error": {"code": "empty_message"}}) == 400
+    assert _http_status({"success": False, "error": {"code": "validation_error"}}) == 422
     assert _http_status({"success": False, "error": {"code": "internal_error"}}) == 500
-    assert _http_status({"success": False, "source": "fallback", "intent": "error"}) == 503
+    assert _http_status({"success": False, "error": {"code": "llm_unavailable"}}) == 503
+    assert _http_status({"success": False, "error": {"code": "llm_timeout"}}) == 504
     assert _http_status({"success": True, "source": "conversational"}) == 200
 
 

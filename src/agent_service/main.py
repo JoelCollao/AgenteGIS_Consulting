@@ -31,7 +31,6 @@ load_dotenv()
 
 from fastapi import Depends, FastAPI, Request  # noqa: E402
 from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
-from fastapi.responses import JSONResponse  # noqa: E402
 
 from agent_service.config import settings  # noqa: E402
 from agent_service.telemetry.observability import (  # noqa: E402
@@ -182,21 +181,10 @@ def create_app() -> FastAPI:
             )
             request_id_var.reset(token)
 
-    @app.exception_handler(Exception)
-    async def global_exception_handler(request: Request, exc: Exception):
-        logger.error(
-            "Excepción no controlada en %s %s: %s", request.method, request.url.path, exc,
-            exc_info=exc, extra={"event": "http.unhandled_exception"},
-        )
-        content = {
-            "error": "Error interno del servidor",
-            "path": request.url.path,
-            "method": request.method,
-            "request_id": request_id_var.get(),
-        }
-        if settings.debug_errors:
-            content["details"] = str(exc)
-        return JSONResponse(status_code=500, content=content)
+    # Un solo formato de error para toda la API (401, 422, 500…)
+    from agent_service.api.errors import register_error_handlers
+
+    register_error_handlers(app)
 
     # ── Routers ──────────────────────────────────────────────────────────
     from agent_service.api import health, orchestrator

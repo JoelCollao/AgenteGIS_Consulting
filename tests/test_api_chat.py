@@ -120,3 +120,84 @@ def test_chat_con_tool_reenvia_el_jwt_al_backend(app_client):
 def test_health_es_publico(app_client):
     client, _, _ = app_client
     assert client.get("/api/v1/health").json()["status"] == "healthy"
+
+
+def _sse_events(body: str):
+    import json
+
+    return [json.loads(line[len("data: "):]) for line in body.splitlines() if line.startswith("data: ")]
+
+
+def test_stream_emite_status_delta_y_done(app_client):
+    client, llm, seen = app_client
+    llm.script[:] = [
+        LLMResponse(tool_calls=[LLMToolCall(id="c1", name="count_features", arguments='{"layer": "puntos"}')]),
+        LLMResponse(content="La capa puntos tiene 21 registros."),
+    ]
+    token = _token()
+
+    r = client.post(
+        "/api/v1/orchestrator/stream",
+        json={"message": "¿cuántos puntos hay?"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert r.status_code == 200, r.text
+    assert r.headers["content-type"].startswith("text/event-stream")
+    events = _sse_events(r.text)
+    assert [e["type"] for e in events] == ["status", "delta", "done"]
+    assert "count_features" in events[0]["text"]
+    assert events[1]["text"] == "La capa puntos tiene 21 registros."
+    done = events[2]
+    assert done["status"] == 200
+    assert done["response"]["reply"] == "La capa puntos tiene 21 registros."
+    assert done["response"]["tools_executed"] == [{"name": "count_features", "success": True}]
+    # El JWT llega al backend también por la ruta de streaming
+    (call,) = seen
+    assert call.headers["authorization"] == f"Bearer {token}"
+
+
+def test_stream_sin_token_401(app_client):
+    client, _, _ = app_client
+    r = client.post("/api/v1/orchestrator/stream", json={"message": "hola"})
+    assert r.status_code == 401
+
+
+def test_cuerpo_invalido_422_con_formato_comun(app_client):
+    client, _, _ = app_client
+    r = client.post("/api/v1/orchestrator", json={"message": "   "},
+                    headers={"Authorization": f"Bearer {_token()}"})
+    assert r.status_code == 422
+    body = r.json()
+    assert body["success"] is False
+    assert body["error"]["code"] == "validation_error"
+    assert body["error"]["details"][0]["field"] == "message"
+
+
+def test_401_con_formato_comun(app_client):
+    client, _, _ = app_client
+    r = client.post("/api/v1/orchestrator", json={"message": "hola"})
+    assert r.status_code == 401
+    assert r.json()["error"] == {"code": "unauthorized",
+                                 "message": "No autenticado: falta el header Authorization"}
+
+
+def test_proveedor_caido_503_sin_detalle_tecnico(app_client, monkeypatch):
+    client, llm, _ = app_client
+    monkeypatch.setattr(llm, "is_available", lambda: False)
+    monkeypatch.setattr(llm, "get_last_error", lambda: "401 key inválida user_123", raising=False)
+    r = client.post("/api/v1/orchestrator", json={"message": "hola"},
+                    headers={"Authorization": f"Bearer {_token()}"})
+    assert r.status_code == 503
+    body = r.json()
+    assert body["error"]["code"] == "llm_unavailable"
+    assert "details" not in body["error"]
+    assert "user_123" not in r.text
+
+
+def test_swagger_documenta_codigos_y_ejemplos(app_client):
+    client, _, _ = app_client
+    op = client.get("/openapi.json").json()["paths"]["/api/v1/orchestrator"]["post"]
+    assert {"200", "401", "422", "500", "503", "504"} <= set(op["responses"])
+    examples = op["requestBody"]["content"]["application/json"]["examples"]
+    assert examples["minimo"]["value"] == {"message": "¿Qué es un buffer?"}

@@ -39,7 +39,7 @@ session_id_var: contextvars.ContextVar[str] = contextvars.ContextVar(
     "session_id", default="-"
 )
 
-_TRACER_NAME = "gis-backend"
+_TRACER_NAME = "agent-service"
 _telemetry_enabled = False
 
 
@@ -124,6 +124,11 @@ def configure_telemetry(app: Any) -> bool:
 
     from azure.monitor.opentelemetry import configure_azure_monitor
     from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+    from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
+
+    # cloud_RoleName en App Insights: separa este servicio del backend en el
+    # mapa de aplicación aunque compartan recurso.
+    os.environ.setdefault("OTEL_SERVICE_NAME", _TRACER_NAME)
 
     configure_azure_monitor(
         logger_name="agent_service",  # solo los logs de la app viajan como traces de AI
@@ -132,6 +137,10 @@ def configure_telemetry(app: Any) -> bool:
     # Se instrumenta la instancia concreta (la distro solo engancha la clase
     # al importar, y aquí FastAPI ya está importado).
     FastAPIInstrumentor.instrument_app(app, excluded_urls="api/v1/health,api/v1/ready")
+    # La distro no instrumenta httpx, que es lo que usan el cliente del
+    # backend y el SDK de OpenAI. Sin esto no se propaga `traceparent` al
+    # backend y las llamadas al LLM no aparecen como dependencias.
+    HTTPXClientInstrumentor().instrument()
     _telemetry_enabled = True
     return True
 

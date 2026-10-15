@@ -62,7 +62,7 @@ Variables:
 import logging
 from typing import Any, Dict, List, Optional
 
-from agent_service.models.illm_provider import LLMResponse, LLMToolCall
+from agent_service.models.illm_provider import ILLMProvider, LLMResponse, LLMToolCall
 from agent_service.models.base import OpenAIChatProviderBase
 
 logger = logging.getLogger(__name__)
@@ -325,6 +325,10 @@ class AzureAgentProvider(OpenAIChatProviderBase):
 
     def _invoke(self, client: Any, kwargs: Dict[str, Any]) -> Any:
         return client.responses.create(**kwargs)
+
+    # Los eventos de stream de la Responses API no son chunks de
+    # chat.completions: se usa la versión del port (respuesta entera de una vez).
+    astream_chat = ILLMProvider.astream_chat
 
     # ── Traducción: Responses API → port ──────────────────────────────
 

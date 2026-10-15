@@ -13,7 +13,7 @@ import logging
 import threading
 import time
 from contextlib import contextmanager
-from typing import Any, Dict, Iterator, List, Optional
+from typing import Any, Callable, Dict, Iterator, List, Optional
 
 from agent_service.models.llm_settings import LLMConfig
 from agent_service.telemetry.cost import estimate_cost_usd
@@ -27,6 +27,13 @@ class _Observation:
     """Resultado de una llamada observada; lo rellena el llamador."""
 
     response: Optional[LLMResponse] = None
+
+
+class _Usage:
+    """Adapta el `usage` suelto de un stream a la forma que lee `_extract_usage`."""
+
+    def __init__(self, usage: Any):
+        self.usage = usage
 
 
 class OpenAIChatProviderBase(ILLMProvider):
@@ -213,6 +220,95 @@ class OpenAIChatProviderBase(ILLMProvider):
             obs.response = self._to_response(raw)
         return obs.response
 
+    async def astream_chat(
+        self,
+        messages: List[Dict[str, Any]],
+        on_delta: Callable[[str], None],
+        tools: Optional[List[Dict[str, Any]]] = None,
+        tool_choice: str = "auto",
+        timeout: Optional[float] = None,
+    ) -> LLMResponse:
+        """
+        `achat` con `stream=True`: el texto sale por `on_delta` según llega y
+        las tool calls, que también llegan troceadas, se ensamblan para
+        devolver la misma respuesta completa que `achat`.
+
+        El timeout cubre el stream entero, no solo el primer fragmento.
+        """
+        aclient = await self._ensure_async_client()
+        kwargs = self._request_kwargs(messages, tools, tool_choice)
+        kwargs["stream"] = True
+        # Sin esto el stream no trae `usage` y se pierden tokens y costo.
+        kwargs["stream_options"] = {"include_usage": True}
+        limit = timeout or self._config.timeout
+
+        with self._observed(kwargs) as obs:
+            try:
+                async with asyncio.timeout(limit):
+                    stream = await self._ainvoke(aclient, kwargs)
+                    obs.response = await self._consume_stream(stream, on_delta)
+            except TimeoutError as exc:
+                self._last_error = f"Timeout de {limit:.0f}s sin respuesta"
+                raise TimeoutError(
+                    f"El proveedor '{self._config.provider}' no respondió en {limit:.0f}s. "
+                    "Verifica el endpoint, el modelo/deployment y la conectividad."
+                ) from exc
+            except Exception as exc:
+                self._last_error = str(exc)
+                raise
+        return obs.response
+
+    @staticmethod
+    async def _consume_stream(stream: Any, on_delta: Callable[[str], None]) -> LLMResponse:
+        """Recorre los chunks de chat.completions y arma la LLMResponse."""
+        content: List[str] = []
+        # Cada tool call llega en varios chunks con el mismo `index`: el
+        # primero trae id y nombre, los siguientes trozos de los argumentos.
+        calls: Dict[int, Dict[str, str]] = {}
+        reasoning: List[Any] = []
+        model: Optional[str] = None
+        usage: Any = None
+
+        async for chunk in stream:
+            model = getattr(chunk, "model", None) or model
+            usage = getattr(chunk, "usage", None) or usage
+            # Azure manda un primer chunk de filtros de contenido y el de
+            # `usage` llega al final: los dos sin choices.
+            for choice in getattr(chunk, "choices", None) or []:
+                delta = getattr(choice, "delta", None)
+                if delta is None:
+                    continue
+                text = getattr(delta, "content", None)
+                if text:
+                    content.append(text)
+                    on_delta(text)
+                for tc in getattr(delta, "tool_calls", None) or []:
+                    slot = calls.setdefault(
+                        getattr(tc, "index", 0) or 0, {"id": "", "name": "", "arguments": ""}
+                    )
+                    slot["id"] = getattr(tc, "id", None) or slot["id"]
+                    function = getattr(tc, "function", None)
+                    if function is not None:
+                        slot["name"] += getattr(function, "name", None) or ""
+                        slot["arguments"] += getattr(function, "arguments", None) or ""
+                details = getattr(delta, "reasoning_details", None)
+                if details:
+                    reasoning.extend(details if isinstance(details, list) else [details])
+
+        response = LLMResponse(
+            content="".join(content) or None,
+            tool_calls=[
+                LLMToolCall(id=c["id"], name=c["name"], arguments=c["arguments"] or "{}")
+                for _, c in sorted(calls.items())
+            ],
+            model=model,
+            reasoning_details=reasoning or None,
+        )
+        response.input_tokens, response.output_tokens = OpenAIChatProviderBase._extract_usage(
+            _Usage(usage)
+        )
+        return response
+
     # ── Petición (sobreescribible por adaptadores con otro protocolo) ──
 
     def _request_kwargs(
@@ -233,6 +329,11 @@ class OpenAIChatProviderBase(ILLMProvider):
             kwargs["extra_headers"] = self._config.headers
         if self._config.reasoning_effort:
             kwargs["reasoning_effort"] = self._config.reasoning_effort
+        if self._config.max_tokens:
+            # Azure (gpt-5*, o*) solo acepta max_completion_tokens; el resto
+            # de proveedores compatibles sigue usando max_tokens.
+            key = "max_tokens" if self._config.kind == "openai_compatible" else "max_completion_tokens"
+            kwargs[key] = self._config.max_tokens
         if self._config.extra_body:
             kwargs["extra_body"] = self._config.extra_body
         return kwargs

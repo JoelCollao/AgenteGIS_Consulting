@@ -14,12 +14,14 @@ DI Container elige según LLM_PROVIDER. Ver src/config/llm_settings.py.
 import asyncio
 import json
 import logging
+import re
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
 from agent_service.agents.iai_agent import IAIAgent
 from agent_service.agents.layers import match_layer, normalize_name
 from agent_service.models.illm_provider import ILLMProvider, LLMResponse, LLMToolCall
+from agent_service.orchestrator.streaming import emit, is_streaming
 from agent_service.prompts import GIS_SYSTEM_PROMPT, GIS_TOOL_DEFINITIONS
 from agent_service.tools.registry import execute_skill
 
@@ -48,6 +50,30 @@ TOOL_DEFINITIONS = [t for t in GIS_TOOL_DEFINITIONS if t["function"]["name"] in 
 MAX_TOOL_STEPS = 5
 # Skills simultáneas por ronda (cada una ocupa una conexión de PostGIS).
 MAX_PARALLEL_TOOLS = 4
+# Fallos de una misma tool antes de cortar y redactar con lo que hay: un solo
+# reintento. Sin esto el modelo repetía el buffer fallido hasta MAX_TOOL_STEPS
+# (3 llamadas al backend y ~2 min de espera para acabar en el mismo error).
+MAX_TOOL_FAILURES = 2
+
+# Datos del mapa que llegan al prompt (nombres de capa, campos). Los escribe
+# quien edita GeoServer/PostGIS o sube un archivo, no el usuario del chat: son
+# vía de prompt injection indirecta. Se recortan y se les quitan los caracteres
+# con los que se "escapa" del bloque de datos ([ ] < > y saltos de línea).
+MAX_LABEL_CHARS = 80
+_LABEL_STRIP = re.compile(r"[\[\]<>{}`\x00-\x1f\x7f]")
+
+
+def _sanitize_label(value: Any, max_chars: int = MAX_LABEL_CHARS) -> str:
+    """Texto de un dato del mapa apto para ir dentro de <datos_capa>."""
+    text = _LABEL_STRIP.sub(" ", str(value))
+    text = " ".join(text.split())
+    if len(text) > max_chars:
+        text = text[: max_chars - 1].rstrip() + "…"
+    return text or "?"
+
+
+class LLMCallError(Exception):
+    """Falló la llamada al modelo (no el agente): se responde 503/504, no 500."""
 
 
 @dataclass
@@ -134,7 +160,7 @@ class AgenteConsultaGIS(IAIAgent):
 
             for step in range(1, MAX_TOOL_STEPS + 1):
                 try:
-                    response = await self.llm.achat(messages, tools=TOOL_DEFINITIONS)
+                    response = await self._call_llm(messages, tools=TOOL_DEFINITIONS)
                 except Exception:
                     if not runs:
                         raise
@@ -154,6 +180,10 @@ class AgenteConsultaGIS(IAIAgent):
                     ", ".join(tc.name for tc in response.tool_calls),
                 )
                 messages.append(self._assistant_message(response))
+                emit({
+                    "type": "status",
+                    "text": "Ejecutando " + ", ".join(tc.name for tc in response.tool_calls) + "…",
+                })
                 step_runs = await self._run_tools(response.tool_calls, context)
                 runs.extend(step_runs)
                 messages.extend(
@@ -165,6 +195,20 @@ class AgenteConsultaGIS(IAIAgent):
                     for run in step_runs
                 )
 
+                failed = self._repeated_failure(runs)
+                if failed:
+                    logger.warning(
+                        "[AgenteGIS] '%s' falló %d veces: se deja de reintentar",
+                        failed, MAX_TOOL_FAILURES,
+                    )
+                    messages.append({
+                        "role": "user",
+                        "content": f"La operación '{failed}' ha fallado {MAX_TOOL_FAILURES} "
+                                   "veces. No la reintentes: explica el error al usuario "
+                                   "en pocas líneas.",
+                    })
+                    return self._build_response(await self._narrate(messages, runs[-1]), runs)
+
             # Límite de rondas: que redacte con lo que hay, sin más tools
             logger.warning("[AgenteGIS] Alcanzado MAX_TOOL_STEPS=%d", MAX_TOOL_STEPS)
             return self._build_response(await self._narrate(messages, runs[-1]), runs)
@@ -172,7 +216,10 @@ class AgenteConsultaGIS(IAIAgent):
         except Exception as e:
             self._last_error = str(e)
             logger.error("Error en function calling: %s", e, exc_info=True)
-            return self._fallback_response(message)
+            if not isinstance(e, LLMCallError):
+                # Fallo nuestro (contexto raro, bug): no culpar al proveedor de IA
+                return self._internal_error_response(str(e))
+            return self._fallback_response(message, timeout=isinstance(e.__cause__, TimeoutError))
 
     # ------------------------------------------------------------------
     # Construcción de mensajes
@@ -203,36 +250,42 @@ class AgenteConsultaGIS(IAIAgent):
             return message
 
         parts = [message]
+        data_lines: List[str] = []
 
-        # Inyectar información de capas disponibles
+        # Información de capas disponibles
         layers_data = context.get("layersData")
         if layers_data:
             layers = layers_data.get("layers", [])
             if layers:
-                layer_summaries = []
+                data_lines.append(f"Capas cargadas en el mapa ({len(layers)}):")
                 for lyr in layers:
-                    name = lyr.get("name", "?")
-                    geom = lyr.get("geometryType", "?")
-                    fc = lyr.get("featureCount", "?")
-                    fields = lyr.get("fields", [])
-                    fields_str = ", ".join(fields[:10]) if fields else "sin campos"
-                    layer_summaries.append(
-                        f"  - {name} [{geom}, {fc} features] campos: {fields_str}"
+                    if not isinstance(lyr, dict):
+                        continue
+                    name = _sanitize_label(lyr.get("name", "?"))
+                    geom = _sanitize_label(lyr.get("geometryType", "?"), 20)
+                    fc = _sanitize_label(lyr.get("featureCount", "?"), 12)
+                    fields = lyr.get("fields") or []
+                    fields_str = (
+                        ", ".join(_sanitize_label(f, 40) for f in fields[:10])
+                        if fields else "sin campos"
                     )
-                parts.append(
-                    f"\n[Capas cargadas en el mapa ({len(layers)}):\n"
-                    + "\n".join(layer_summaries)
-                    + "]"
-                )
+                    data_lines.append(f"- {name} [{geom}, {fc} features] campos: {fields_str}")
 
         # Contexto de target layers (operación específica del frontend)
         target_layers = context.get("targetLayers")
         if target_layers:
+            # Una entrada sin "name" se ignora (antes metía el dict en el join y reventaba)
             names = [
-                tl.get("name", tl) if isinstance(tl, dict) else str(tl)
+                _sanitize_label(tl.get("name") if isinstance(tl, dict) else tl)
                 for tl in target_layers
+                if not isinstance(tl, dict) or tl.get("name")
             ]
-            parts.append(f"\n[Capas objetivo seleccionadas: {', '.join(names)}]")
+            if names:
+                data_lines.append(f"Capas objetivo seleccionadas: {', '.join(names)}")
+
+        if data_lines:
+            # Delimitado: el prompt de sistema dice que esto son datos, nunca órdenes
+            parts.append("\n<datos_capa>\n" + "\n".join(data_lines) + "\n</datos_capa>")
 
         return "\n".join(parts)
 
@@ -308,6 +361,25 @@ class AgenteConsultaGIS(IAIAgent):
         result = await execute_skill(call.name, params)
         return _ToolRun(call, result)
 
+    async def _call_llm(
+        self, messages: List[Dict], tools: Optional[List[Dict]] = None
+    ) -> LLMResponse:
+        """
+        Una llamada al modelo. Si la petición entró por el endpoint de
+        streaming, el texto se emite según llega; la respuesta devuelta es la
+        misma en los dos casos.
+        """
+        try:
+            if not is_streaming():
+                return await self.llm.achat(messages, tools=tools)
+            return await self.llm.astream_chat(
+                messages,
+                on_delta=lambda text: emit({"type": "delta", "text": text}),
+                tools=tools,
+            )
+        except Exception as exc:
+            raise LLMCallError(str(exc)) from exc
+
     @staticmethod
     def _assistant_message(response: LLMResponse) -> Dict[str, Any]:
         """Mensaje assistant con TODAS las tool calls de la ronda."""
@@ -327,10 +399,21 @@ class AgenteConsultaGIS(IAIAgent):
             msg["reasoning_details"] = response.reasoning_details
         return msg
 
+    @staticmethod
+    def _repeated_failure(runs: List[_ToolRun]) -> Optional[str]:
+        """Nombre de la tool que ya falló MAX_TOOL_FAILURES veces, o None."""
+        failures: Dict[str, int] = {}
+        for run in runs:
+            if not run.result.get("success"):
+                failures[run.call.name] = failures.get(run.call.name, 0) + 1
+                if failures[run.call.name] >= MAX_TOOL_FAILURES:
+                    return run.call.name
+        return None
+
     async def _narrate(self, messages: List[Dict], last_run: _ToolRun) -> str:
         """Pide al modelo que redacte sin tools; si falla, narración básica."""
         try:
-            narration = await self.llm.achat(messages)
+            narration = await self._call_llm(messages)
             return narration.content or self._basic_narrative(last_run)
         except Exception as e:  # pylint: disable=broad-except
             logger.warning("Error generando narrativa: %s", e)
@@ -584,17 +667,43 @@ class AgenteConsultaGIS(IAIAgent):
     # Fallback y utilidades
     # ------------------------------------------------------------------
 
-    def _fallback_response(self, message: str) -> Dict:
-        """Respuesta de emergencia cuando el proveedor de LLM no está disponible."""
+    def _fallback_response(self, message: str, timeout: bool = False) -> Dict:
+        """
+        Respuesta cuando el proveedor de LLM no está disponible o no respondió.
+
+        El detalle técnico (mensaje del SDK, ids de cuenta del proveedor) va
+        al log y a `error.details`, que la API solo expone con DEBUG_ERRORS;
+        al usuario le llega un mensaje legible. Los códigos son los de
+        api/errors.py (llm_timeout → 504, llm_unavailable → 503).
+        """
         detail = self._last_error or self.llm.get_last_error()
-        error_info = f" | Error: {detail}" if detail else ""
+        logger.warning(
+            "[AgenteGIS] Proveedor '%s' %s: %s",
+            self.llm.get_provider_type(), "sin respuesta a tiempo" if timeout else "no disponible", detail,
+        )
+        if timeout:
+            code, text = "llm_timeout", "El asistente de IA tardó demasiado en responder. Inténtalo de nuevo."
+        else:
+            code, text = "llm_unavailable", "El asistente de IA no está disponible en este momento."
         return {
-            "reply": f"No se pudo conectar al proveedor de IA "
-                     f"'{self.llm.get_provider_type()}'{error_info}",
+            "reply": text,
             "source": "fallback",
             "intent": "error",
             "agent_type": "fallback",
             "success": False,
+            "error": {"code": code, "message": text, "details": detail},
+        }
+
+    @staticmethod
+    def _internal_error_response(detail: str) -> Dict:
+        text = "No se pudo procesar la consulta por un error interno."
+        return {
+            "reply": text,
+            "source": "fallback",
+            "intent": "error",
+            "agent_type": "fallback",
+            "success": False,
+            "error": {"code": "internal_error", "message": text, "details": detail},
         }
 
     def is_available(self) -> bool:

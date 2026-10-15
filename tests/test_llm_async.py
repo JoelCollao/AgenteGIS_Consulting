@@ -221,3 +221,82 @@ def test_reasoning_effort_desde_entorno(monkeypatch):
     monkeypatch.setenv("LLM_REASONING_EFFORT", "rapido")
     with pytest.raises(ValueError, match="minimal, low, medium, high"):
         load_llm_config()
+
+
+# ── astream_chat ─────────────────────────────────────────────────────────
+
+
+class _AsyncStream:
+    def __init__(self, chunks):
+        self.chunks = chunks
+
+    def __aiter__(self):
+        return self._gen()
+
+    async def _gen(self):
+        for chunk in self.chunks:
+            yield chunk
+
+
+def _chunk(content=None, tool_calls=None, usage=None, choices=True):
+    delta = _Obj(content=content, tool_calls=tool_calls, reasoning_details=None)
+    return _Obj(
+        model="m",
+        usage=usage,
+        choices=[_Obj(delta=delta)] if choices else [],
+    )
+
+
+def _tc(index, id=None, name=None, arguments=None):
+    return _Obj(index=index, id=id, function=_Obj(name=name, arguments=arguments))
+
+
+def test_astream_chat_emite_texto_y_devuelve_respuesta_completa():
+    chunks = [
+        _chunk(choices=False),  # filtros de contenido de Azure
+        _chunk("Hola"),
+        _chunk(", mundo"),
+        _chunk(choices=False, usage=_Obj(prompt_tokens=7, completion_tokens=2)),
+    ]
+    completions = _AsyncCompletions(result=_AsyncStream(chunks))
+    provider = _with_async_client(_compatible(), completions)
+    deltas = []
+
+    response = asyncio.run(provider.astream_chat([{"role": "user", "content": "x"}], deltas.append))
+
+    assert deltas == ["Hola", ", mundo"]
+    assert response.content == "Hola, mundo"
+    assert not response.has_tool_calls
+    assert (response.input_tokens, response.output_tokens) == (7, 2)
+    assert completions.kwargs["stream"] is True
+    assert completions.kwargs["stream_options"] == {"include_usage": True}
+
+
+def test_astream_chat_ensambla_tool_calls_troceadas():
+    chunks = [
+        _chunk(tool_calls=[_tc(0, id="c1", name="count_features", arguments='{"la')]),
+        _chunk(tool_calls=[_tc(1, id="c2", name="zoom_layer", arguments="{}")]),
+        _chunk(tool_calls=[_tc(0, arguments='yer": "puntos"}')]),
+    ]
+    completions = _AsyncCompletions(result=_AsyncStream(chunks))
+    provider = _with_async_client(_compatible(), completions)
+    deltas = []
+
+    response = asyncio.run(
+        provider.astream_chat([{"role": "user", "content": "x"}], deltas.append, tools=[{"t": 1}])
+    )
+
+    assert deltas == []
+    assert [(tc.id, tc.name, tc.arguments) for tc in response.tool_calls] == [
+        ("c1", "count_features", '{"layer": "puntos"}'),
+        ("c2", "zoom_layer", "{}"),
+    ]
+
+
+def test_astream_chat_timeout_cubre_el_stream():
+    completions = _AsyncCompletions(result=_AsyncStream([]), delay=5)
+    provider = _with_async_client(_compatible(timeout=0.05), completions)
+
+    with pytest.raises(TimeoutError):
+        asyncio.run(provider.astream_chat([{"role": "user", "content": "x"}], lambda _t: None))
+    assert completions.cancelled
