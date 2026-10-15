@@ -203,6 +203,8 @@ def create_app() -> FastAPI:
     try:
         if configure_telemetry(app):
             logger.info("Telemetría OpenTelemetry → Application Insights activa")
+        else:
+            logger.info("Telemetría desactivada (sin APPLICATIONINSIGHTS_CONNECTION_STRING)")
     except Exception as e:  # pylint: disable=broad-except
         logger.warning("No se pudo activar la telemetría: %s", e)
 
